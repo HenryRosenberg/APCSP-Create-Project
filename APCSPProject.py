@@ -1,3 +1,5 @@
+# Written for AP Computer Science Principles in 2025
+
 # Color Defenitions
 RED = '\033[31m'
 GREEN = '\033[32m'
@@ -11,23 +13,23 @@ WEIGHT_VALUES = [55, 45, 35, 25, 15, 10, 5, 2.5, 1, 0.5] # Common plate values i
 LB_TO_KG_CONVERSION_FACTOR = 2.205
 
 def ASCIIArtOutput(plateCounts):
-    # Prints a graphic of the bar loaded with plates
-    ASCIIRowCutoffs = [35, 20, 0, 20, 35] # Top row, 2nd top, center, 2nd bottom, bottom row; the cuttoff values to draw a character
+    # Prints a graphic of the bar loaded with plates ascii row by row
+    ASCII_ROW_CUTOFFS = [35, 20, 0, 20, 35] # Top row, 2nd top, center, 2nd bottom, bottom row; the cuttoff values to draw a character
 
-    for cutoff in ASCIIRowCutoffs: # Iterate through the cuttoff values for each row
-        # Match the layout of a barbell (lightest -> Heaviest -> Heaviest -> Lightest). [0] denotes the center of the bar
+    for cutoff in ASCII_ROW_CUTOFFS: # Iterate through the cuttoff values for each row
+        # Match the layout of a barbell (Lightest -> Heaviest -> Bar Handle -> Heaviest -> Lightest). [0] denotes the center of the bar
         plateLayout = plateCounts[::-1] + [1] + plateCounts
         plateColorLayout = WEIGHT_COLORS[::-1] + [NORMAL] + WEIGHT_COLORS
         weightValuesLayout = WEIGHT_VALUES[::-1] + [0] + WEIGHT_VALUES
 
-        for plateCount, plateWeight, plateColor in zip(plateLayout, weightValuesLayout, plateColorLayout): # Interate over both lists
-            print(plateColor, end="") # Set the color
+        for plateCount, plateWeight, plateColor in zip(plateLayout, weightValuesLayout, plateColorLayout): # Interate over all three lists at the same time
+            print(plateColor, end="") # Set the output color
             printSymbol = '█'
             if (plateWeight <= 10): # Switch to a smaller block for smaller weights
                 printSymbol = '■'
             
             while plateCount > 0: # Draw multiple of the same plates
-                if (plateWeight == 0): # handle is currently being drawn
+                if (plateWeight == 0): # bar handle is currently being drawn
                     if (cutoff == 0): # If in middle row draw the handle, or just an offset space
                         print("────────────", end="")
                     else:
@@ -47,15 +49,14 @@ def sumWeights(plateCounts, barWeight):
     sumLB = barWeight
 
     for i in range(len(plateCounts)): # Sum the plates
-        sumLB += (WEIGHT_VALUES[i] * plateCounts[i] * 2) # *2 is for 2 of the plates per bar
+        sumLB += (WEIGHT_VALUES[i] * plateCounts[i] * 2) # Lifters always use symetric plates, so multiple by 2 for each of the plates per bar
 
     sumKG = round(sumLB / LB_TO_KG_CONVERSION_FACTOR, 1)
     sumLB = round(sumLB, 1)
 
     return sumLB, sumKG
 
-
-def output(plateCounts, barWeight):
+def output(plateCounts, barWeight, showHelp=True):
     # Prints a title, calls ASCIIArtOutput() to print the graphic, and prints all relevant information
     print("\033[H\033[J") # Clear console
 
@@ -71,15 +72,15 @@ def output(plateCounts, barWeight):
     index = 0
     for i in range(2): # Loop through the rows
         for j in range(5): # Loop through the columns
-            print(WEIGHT_COLORS[index] + str(WEIGHT_VALUES[index]) + "lb: " + str(plateCounts[index] * 2), end="  ") # *2 is for 2 plates on the bar
+            print(WEIGHT_COLORS[index] + str(WEIGHT_VALUES[index]) + "lb: " + str(plateCounts[index] * 2), end="  ") # Symetric plate loading
             index += 1
-        print() # newline only
+        print() # Force a new line
     
     # Print bar info
     print("Bar Size: " + str(barWeight) + "lb\n")
 
-    # Print Instructions
-    print(f"Type {RED}help{NORMAL} for a full list of commands\n")
+    if showHelp: # Print Instructions
+        print(f"Type {RED}help{NORMAL} for a full list of commands\n")
 
 def plateCountModify(plateValue, operation, plateCounts):
     # operation (Bool): False = remove, True = Add
@@ -87,11 +88,11 @@ def plateCountModify(plateValue, operation, plateCounts):
     try:
         index = WEIGHT_VALUES.index(plateValue)
     except ValueError: # not a valid plate size; not found in list
-        return False
+        return False, plateCounts
 
     if (operation == False):
         if (plateCounts[index] == 0): # No plates to remove
-            return False
+            return False, plateCounts
         plateCounts[index] -= 1 # remove a weight
         return True, plateCounts
     elif (operation == True):
@@ -99,46 +100,51 @@ def plateCountModify(plateValue, operation, plateCounts):
         return True, plateCounts
 
 def swapBar(barWeight):
-    # 35 and 45 are the 2 standard sizes. Swap between them
+    # 35lb and 45lb are the 2 standard sizes. Swap between them
     if barWeight == 45:
         return 35
     return 45
 
-def solver(plateCounts, barWeight, weightNeeded):
+def solver(plateCounts, barWeight, targetWeight):
     # Calculates the combination of standard plates needed to reach the requested weight, prioritizes using the largest possible plates
     # Adds on top of prexisitng plates to minimize bar reloading
+    if targetWeight > 2200: 
+        return plateCounts, barWeight, "That's more than double the world record! Please choose a smaller value.\n"
     
-    currentWeightLB, kg = sumWeights(plateCounts, barWeight)
-    weightNeeded -= currentWeightLB
+    currentWeightLB, _ = sumWeights(plateCounts, barWeight)
+    weightNeeded = targetWeight - currentWeightLB
+
+    if weightNeeded <= 0:
+        return plateCounts, barWeight, "Value must be larger than current weight to solve.\n"
 
     for i, selectedWeight in enumerate(WEIGHT_VALUES): # Eneumerate returns a tuple with weight values and their indicies
-        while weightNeeded >= 2 * selectedWeight:  # Two plates, one for each side
+        while weightNeeded >= 2 * selectedWeight: # Two plates, one for each side
             weightNeeded -= 2 * selectedWeight
-            plateCounts[i] += 1  # One per side
+            plateCounts[i] += 1
 
-    return plateCounts, barWeight
+    if weightNeeded > 0:
+        return plateCounts, barWeight, f"Warning: Could not exactly match the target weight. {weightNeeded}lb remaining.\n"
 
+    return plateCounts, barWeight, ""
 
 def userInputHander(plateCounts, barWeight):
-    userInput = input() # Get data from terminal
+    userInput = input("Enter command: ") # Get data from terminal
 
     inputWords = userInput.strip().lower().split(" ") # Clean up and split at spaces
     
     try:
         match inputWords[0]: # First word is the command
             case "help":
-                helpCommands(plateCounts, barWeight)
+                showHelpCommands()
             case "add":
-                result = plateCountModify(float(inputWords[1]), True, plateCounts) # True is addition
-                if result:
-                    success, plateCounts = result # Success is unused, just a placeholder
+                success, plateCounts = plateCountModify(float(inputWords[1]), True, plateCounts) # True is addition
+                if success:
                     output(plateCounts, barWeight) # Go to main page
                 else:
                     print(f"Invalid plate size. Use {RED}solve{NORMAL} to reach desired weight")
             case "remove":
-                result = plateCountModify(float(inputWords[1]), False, plateCounts) # False is subtraction
-                if result:
-                    success, plateCounts = result # Sucess is unused, just a placeholder
+                success, plateCounts = plateCountModify(float(inputWords[1]), False, plateCounts) # False is subtraction
+                if success:
                     output(plateCounts, barWeight) # Go to main page
                 else:
                     print("Invalid plate size or no plates to remove.")
@@ -150,8 +156,9 @@ def userInputHander(plateCounts, barWeight):
                 plateCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] 
                 output(plateCounts, barWeight) # Go to main page
             case "solve":
-                plateCounts, barWeight = solver(plateCounts, barWeight, float(inputWords[1])) # calculate the plates to add
+                plateCounts, barWeight, solverMessage = solver(plateCounts, barWeight, float(inputWords[1])) # calculate the plates to add
                 output(plateCounts, barWeight) # Go to main page
+                print(solverMessage, end="")
             case "exit":
                 exit(0) # End program with code of 0 (success) 
             case _: # None of the above
@@ -159,10 +166,12 @@ def userInputHander(plateCounts, barWeight):
     
     except ValueError: # Input could not be converted to a float
         print("Invalid value")
+    except TypeError:
+        print("Error")
     
     return plateCounts, barWeight
 
-def helpCommands(plateCounts, barWeight):
+def showHelpCommands():
     print(f"  {RED}add{NORMAL} <weight>     Add a weight of <weight> lb to your bar. Example: add 35")
     print(f"  {RED}remove{NORMAL} <weight>  Remove a weight of <weight> lb to your bar. Will have no effect if weight is not on your bar. Example: remove 35")
     print(f"  {RED}solve{NORMAL} <weight>   Set your bar to <weight> lb using a calculated set of plates. Keeps preexisting plates Example: solve 227")
@@ -170,13 +179,12 @@ def helpCommands(plateCounts, barWeight):
     print(f"  {RED}clear{NORMAL}            Remove all weights. Example: clear")
     print(f"  {RED}exit{NORMAL}             Exit program. Example: exit\n")
 
-    userInputHander(plateCounts, barWeight)
-
 def main():
     barWeight = 45 # Default Mens bar
     weights = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] 
 
-    output(weights, barWeight)
+    output(weights, barWeight, False)
+    showHelpCommands()
 
     while(True): 
         weights, barWeight = userInputHander(weights, barWeight)
